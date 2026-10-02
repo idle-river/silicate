@@ -8,7 +8,7 @@ pub struct Stats {
 }
 
 /// This function will get stats for the password manager, such as the total number of passwords and the number of unique tags.
-pub fn get_stats(config_dir: &str) -> Result<Stats, SilicateError> {
+pub(crate) fn get_stats(config_dir: &str) -> Result<Stats, SilicateError> {
     let passwords = crate::passwords::list_passwords(config_dir)?;
     let total_passwords = passwords.len();
     let unique_tags = crate::tags::list_tags(config_dir)?.len();

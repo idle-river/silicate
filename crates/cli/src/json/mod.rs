@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use silicate_core::{SilicateError, find_password_file};
+use silicate_core::Silicate;
+use silicate_core::error::SilicateError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Secret {
@@ -10,10 +11,12 @@ pub struct Secret {
 
 /// This function reads the secrets from the files in the config directory and returns a vector of Secret structs.
 pub fn get_secrets(config_dir: &str, websites: Vec<String>) -> Result<Vec<Secret>, SilicateError> {
+    let silicate = Silicate::new(config_dir.to_string());
     let mut secrets = Vec::new();
     for website in websites {
         // (e.g., "github" or "github-tag")
-        let file_identifier = find_password_file(config_dir, &website.to_string())?
+        let file_identifier = silicate
+            .find_password_file(&website.to_string())?
             .ok_or("unknown".to_string())
             .unwrap();
 

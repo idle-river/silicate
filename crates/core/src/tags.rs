@@ -1,7 +1,7 @@
 use crate::error::SilicateError;
 
 /// This function will get all unique tags from the password files in the config directory.
-pub fn list_tags(config_dir: &str) -> Result<Vec<String>, SilicateError> {
+pub(crate) fn list_tags(config_dir: &str) -> Result<Vec<String>, SilicateError> {
     let mut tags = Vec::new();
     let passwords = crate::passwords::list_passwords(config_dir)?;
     for password in passwords {

@@ -5,14 +5,14 @@ const SERVICE_NAME: &str = "silicate";
 const USERNAME: &str = "default";
 
 /// This puts a randomly generated key into the system's keyring.
-pub fn store_key_in_keyring(key: &[u8; 32]) -> Result<(), SilicateError> {
+pub(crate) fn store_key_in_keyring(key: &[u8; 32]) -> Result<(), SilicateError> {
     let entry = Entry::new(SERVICE_NAME, USERNAME)?;
     entry.set_password(&hex::encode(key))?;
     Ok(())
 }
 
 /// This retrieves the key from the system's keyring.
-pub fn retrieve_key_from_keyring() -> Result<[u8; 32], SilicateError> {
+pub(crate) fn retrieve_key_from_keyring() -> Result<[u8; 32], SilicateError> {
     let entry = Entry::new(SERVICE_NAME, USERNAME)?;
     let key_hex = entry.get_password()?;
     let key_bytes: [u8; 32] = hex::decode(key_hex)?.try_into()?;
@@ -21,12 +21,12 @@ pub fn retrieve_key_from_keyring() -> Result<[u8; 32], SilicateError> {
 
 /// This function checks if a keyring is available and can be accessed.
 /// This will be for checking if the user has a secure key management solution in place.
-pub fn is_keyring_available() -> bool {
+pub(crate) fn is_keyring_available() -> bool {
     let entry = Entry::new(SERVICE_NAME, USERNAME);
     entry.is_ok()
 }
 
-pub fn update_entry(
+pub(crate) fn update_entry(
     config_dir: &str,
     website: &str,
     tag: Option<&str>,

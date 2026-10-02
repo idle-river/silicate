@@ -5,7 +5,7 @@ use aes_gcm::{
 };
 
 /// Encrypts the given plaintext using AES-256-GCM. Returns the ciphertext and the nonce used for encryption.
-pub fn encrypt_passwd(
+pub(crate) fn encrypt_passwd(
     key_bytes: &[u8; 32],
     plaintext: String,
 ) -> Result<(Vec<u8>, [u8; 12]), SilicateError> {
@@ -21,7 +21,7 @@ pub fn encrypt_passwd(
 }
 
 /// Decrypts the given ciphertext using AES-256-GCM. Requires the same key and nonce used for encryption.
-pub fn decrypt_passwd(
+pub(crate) fn decrypt_passwd(
     key_bytes: &[u8; 32],
     ciphertext: Vec<u8>,
     nonce_bytes: [u8; 12],

@@ -10,7 +10,8 @@ use ratatui::{
         Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Paragraph, Wrap,
     },
 };
-use silicate_core::SilicateError;
+use silicate_core::Silicate;
+use silicate_core::error::SilicateError;
 
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     Rect {
@@ -32,13 +33,14 @@ pub struct App {
     entries: Vec<String>,
     state: ListState,
     key: [u8; 32],
+    silicate: Silicate,
     search_query: String,
     is_searching: bool,
     search_target: SearchTarget,
 }
 
 impl App {
-    pub fn new(entries: Vec<String>, key: [u8; 32]) -> Self {
+    pub fn new(entries: Vec<String>, key: [u8; 32], config_dir: String) -> Self {
         let mut state = ListState::default();
         state.select(None);
         App {
@@ -46,6 +48,7 @@ impl App {
             entries,
             state,
             key,
+            silicate: Silicate::new(config_dir),
             search_query: String::new(),
             is_searching: false,
             search_target: SearchTarget::Name,
@@ -269,7 +272,7 @@ impl App {
 
         let (nonce_bytes, cipher_bytes) = data.split_at(12);
 
-        let decrypted = silicate_core::decrypt_passwd(
+        let decrypted = self.silicate.decrypt_passwd(
             &self.key,
             cipher_bytes.to_vec(),
             nonce_bytes.try_into()?,

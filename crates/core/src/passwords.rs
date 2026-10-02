@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 
 /// This function lists all the password files in the config directory, excluding the salt file.
 /// It returns a vector of website names (without the .bin extension).
-pub fn list_passwords(config_dir: &str) -> Result<Vec<String>, SilicateError> {
+pub(crate) fn list_passwords(config_dir: &str) -> Result<Vec<String>, SilicateError> {
     let mut websites = Vec::new();
     if let Ok(entries) = std::fs::read_dir(config_dir) {
         for entry in entries.flatten() {
@@ -21,7 +21,7 @@ pub fn list_passwords(config_dir: &str) -> Result<Vec<String>, SilicateError> {
 }
 
 /// This function takes the config directory and an optional tag, lists the passwords, filters them by tag if provided,
-pub fn search_password(
+pub(crate) fn search_password(
     config_dir: &str,
     tag: &Option<String>,
 ) -> Result<Option<String>, SilicateError> {
@@ -105,7 +105,7 @@ pub fn search_password(
 }
 
 /// This function generates a random password of the specified length. If use_symbols is true, it includes symbols in the password.
-pub fn generate_password(length: usize, use_symbols: bool) -> String {
+pub(crate) fn generate_password(length: usize, use_symbols: bool) -> String {
     if length == 0 {
         return String::new();
     }
@@ -146,7 +146,7 @@ fn sample_from_pool(pool: &[u8], length: usize) -> String {
     result
 }
 
-pub fn update_password(
+pub(crate) fn update_password(
     config_dir: &str,
     key: &[u8; 32],
     website: &str,

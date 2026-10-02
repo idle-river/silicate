@@ -1,13 +1,4 @@
-pub use error::SilicateError;
-
-pub use crypto::{decrypt_passwd, encrypt_passwd};
-pub use keyring::{is_keyring_available, retrieve_key_from_keyring, store_key_in_keyring};
-pub use keys::{
-    derive_key_from_password, export_key, generate_fallback_key, generate_key, import_key,
-};
-pub use passwords::{generate_password, list_passwords, search_password};
-pub use stats::{Stats, get_stats};
-pub use tags::list_tags;
+use crate::error::SilicateError;
 
 pub mod crypto;
 pub mod error;
@@ -17,12 +8,141 @@ pub mod passwords;
 pub mod stats;
 pub mod tags;
 
+pub struct Silicate {
+    config_dir: String,
+}
+
+impl Silicate {
+    pub fn new(config_dir: String) -> Self {
+        Self { config_dir }
+    }
+
+    pub fn config_dir(&self) -> &str {
+        &self.config_dir
+    }
+
+    pub fn check_fzf_installed(&self) -> bool {
+        check_fzf_installed()
+    }
+
+    pub fn encrypt_passwd(
+        &self,
+        key_bytes: &[u8; 32],
+        plaintext: String,
+    ) -> Result<(Vec<u8>, [u8; 12]), SilicateError> {
+        crypto::encrypt_passwd(key_bytes, plaintext)
+    }
+
+    pub fn decrypt_passwd(
+        &self,
+        key_bytes: &[u8; 32],
+        ciphertext: Vec<u8>,
+        nonce_bytes: [u8; 12],
+    ) -> Result<String, SilicateError> {
+        crypto::decrypt_passwd(key_bytes, ciphertext, nonce_bytes)
+    }
+
+    pub fn store_key_in_keyring(&self, key: &[u8; 32]) -> Result<(), SilicateError> {
+        keyring::store_key_in_keyring(key)
+    }
+
+    pub fn retrieve_key_from_keyring(&self) -> Result<[u8; 32], SilicateError> {
+        keyring::retrieve_key_from_keyring()
+    }
+
+    pub fn is_keyring_available(&self) -> bool {
+        keyring::is_keyring_available()
+    }
+
+    pub fn update_entry(
+        &self,
+        website: &str,
+        tag: Option<&str>,
+        new_data: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        keyring::update_entry(&self.config_dir, website, tag, new_data)
+    }
+
+    pub fn generate_key(&self) -> [u8; 32] {
+        keys::generate_key()
+    }
+
+    pub fn generate_fallback_key(
+        &self,
+        password: &str,
+    ) -> Result<([u8; 32], [u8; 16]), SilicateError> {
+        keys::generate_fallback_key(password)
+    }
+
+    pub fn derive_key_from_password(
+        &self,
+        password: &str,
+        salt: &[u8; 16],
+    ) -> Result<[u8; 32], SilicateError> {
+        keys::derive_key_from_password(password, salt)
+    }
+
+    pub fn export_key(&self, file_path: &Option<String>) -> Result<(), SilicateError> {
+        keys::export_key(file_path)
+    }
+
+    pub fn import_key(&self, file_path: &str) -> Result<(), SilicateError> {
+        keys::import_key(file_path)
+    }
+
+    pub fn list_passwords(&self) -> Result<Vec<String>, SilicateError> {
+        passwords::list_passwords(&self.config_dir)
+    }
+
+    pub fn search_password(&self, tag: &Option<String>) -> Result<Option<String>, SilicateError> {
+        passwords::search_password(&self.config_dir, tag)
+    }
+
+    pub fn generate_password(&self, length: usize, use_symbols: bool) -> String {
+        passwords::generate_password(length, use_symbols)
+    }
+
+    pub fn update_password(
+        &self,
+        key: &[u8; 32],
+        website: &str,
+        tag: Option<&str>,
+        new_plaintext: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        passwords::update_password(&self.config_dir, key, website, tag, new_plaintext)
+    }
+
+    pub fn list_tags(&self) -> Result<Vec<String>, SilicateError> {
+        tags::list_tags(&self.config_dir)
+    }
+
+    pub fn get_stats(&self) -> Result<stats::Stats, SilicateError> {
+        stats::get_stats(&self.config_dir)
+    }
+
+    pub fn find_password_file(
+        &self,
+        target_website: &str,
+    ) -> Result<Option<String>, SilicateError> {
+        find_password_file(&self.config_dir, target_website)
+    }
+
+    pub fn rename_password_file(
+        &self,
+        old_website: &str,
+        new_website: &str,
+        tag: &Option<String>,
+    ) -> Result<(), SilicateError> {
+        rename_password_file(&self.config_dir, old_website, new_website, tag)
+    }
+}
+
 /// This function checks if fzf is installed on the system by trying to find its path.
-pub fn check_fzf_installed() -> bool {
+fn check_fzf_installed() -> bool {
     which::which("fzf").is_ok()
 }
 
-pub fn find_password_file(
+fn find_password_file(
     config_dir: &str,
     target_website: &str,
 ) -> Result<Option<String>, SilicateError> {
@@ -46,7 +166,7 @@ pub fn find_password_file(
 }
 
 /// This function will rename a password file in the config directory.
-pub fn rename_password_file(
+fn rename_password_file(
     config_dir: &str,
     old_website: &str,
     new_website: &str,
