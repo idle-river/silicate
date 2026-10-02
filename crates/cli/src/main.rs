@@ -4,7 +4,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 use clap::{Parser, Subcommand};
 use colored::*;
 use rpassword::prompt_password_with_config;
-use silicate_core::*;
+use silicate_core::Silicate;
 use std::process;
 use std::string::ToString;
 use std::{
@@ -224,10 +224,10 @@ fn write_init_timestamp() -> chrono::DateTime<chrono::Utc> {
     time_init
 }
 
-fn get_key() -> Vec<u8> {
+fn get_key(silicate: &Silicate) -> Vec<u8> {
     let init_cmd = "silicate init".to_string().italic();
 
-    match retrieve_key_from_keyring() {
+    match silicate.retrieve_key_from_keyring() {
         Ok(k) => k.try_into().unwrap(),
         Err(_) => {
             match fs::exists(config_dir() + "salt.bin") {
@@ -235,22 +235,22 @@ fn get_key() -> Vec<u8> {
                     if t {
                         let salt = fs::read(config_dir() + "salt.bin").unwrap();
                         let password = get_password("Enter key password: ");
-                        let key =
-                            match derive_key_from_password(&password, &salt.try_into().unwrap()) {
-                                Ok(s) => s,
-                                Err(e) => {
-                                    let msg =
-                                        format!("Failed to read salt for key derivation: {}", e)
-                                            .to_string()
-                                            .red();
-                                    println!("{}", msg);
-                                    write_to_logs(&format!(
-                                        "Failed to read salt for key derivation: {}",
-                                        e
-                                    ));
-                                    process::exit(1);
-                                }
-                            };
+                        let key = match silicate
+                            .derive_key_from_password(&password, &salt.try_into().unwrap())
+                        {
+                            Ok(s) => s,
+                            Err(e) => {
+                                let msg = format!("Failed to read salt for key derivation: {}", e)
+                                    .to_string()
+                                    .red();
+                                println!("{}", msg);
+                                write_to_logs(&format!(
+                                    "Failed to read salt for key derivation: {}",
+                                    e
+                                ));
+                                process::exit(1);
+                            }
+                        };
                         return key.to_vec();
                     } else {
                         let msg = format!(
@@ -285,6 +285,7 @@ fn get_key() -> Vec<u8> {
 fn main() {
     let cli = CLI::parse();
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+    let silicate = Silicate::new(config_dir());
 
     if cli.version {
         let tagline = format!("Silicate -- a simple password manager, built for speed.")
@@ -320,10 +321,11 @@ fn main() {
                     password
                 };
 
-                let key = get_key();
+                let key = get_key(&silicate);
 
-                let (cipher_bytes, nonce_bytes) =
-                    encrypt_passwd(&key.try_into().unwrap(), password).unwrap();
+                let (cipher_bytes, nonce_bytes) = silicate
+                    .encrypt_passwd(&key.try_into().unwrap(), password)
+                    .unwrap();
 
                 if let Some(tag) = option_tag {
                     fs::write(
@@ -357,7 +359,7 @@ fn main() {
 
                 if input.trim().to_lowercase() == "y" {
                     // 1. Scan the directory using your existing helper to look for a matching name
-                    let passwords = silicate_core::list_passwords(&config_dir());
+                    let passwords = silicate.list_passwords();
 
                     // Find if any entry matches 'website' or starts with 'website-'
                     let target_file = passwords.unwrap().into_iter().find(|filename| {
@@ -400,16 +402,17 @@ fn main() {
             }
             Command::Show { website, display } => {
                 println!("Retrieving password for: {}", website);
-                let key = get_key();
+                let key = get_key(&silicate);
 
                 let data = fs::read(format!("{}{}.bin", config_dir(), website)).unwrap();
                 let (nonce_bytes, cipher_bytes) = data.split_at(12);
-                let password = silicate_core::decrypt_passwd(
-                    &key.try_into().unwrap(),
-                    cipher_bytes.to_vec(),
-                    nonce_bytes.try_into().unwrap(),
-                )
-                .unwrap();
+                let password = silicate
+                    .decrypt_passwd(
+                        &key.try_into().unwrap(),
+                        cipher_bytes.to_vec(),
+                        nonce_bytes.try_into().unwrap(),
+                    )
+                    .unwrap();
                 if *display {
                     let msg = format!("Password for {}: {}", website, password.bold());
                     println!("{}", msg);
@@ -509,10 +512,10 @@ fn main() {
                 write_to_logs("Password manager initialized.");
 
                 // Generating a new key/password derivation and storing it in the keyring
-                if is_keyring_available() {
-                    let new_key = generate_key();
+                if silicate.is_keyring_available() {
+                    let new_key = silicate.generate_key();
 
-                    match store_key_in_keyring(&new_key) {
+                    match silicate.store_key_in_keyring(&new_key) {
                         Ok(_) => {
                             write_init_timestamp();
                             println!("Key stored in keyring successfully.\n{}", welcome_msg);
@@ -535,7 +538,7 @@ fn main() {
                     }
 
                     let password = get_password("Enter a password to derive the encryption key: ");
-                    let (_, salt) = match generate_fallback_key(&password) {
+                    let (_, salt) = match silicate.generate_fallback_key(&password) {
                         Ok((_, s)) => ((), s),
                         Err(e) => {
                             println!(
@@ -564,7 +567,7 @@ fn main() {
                 display,
                 tag: option_tag,
             } => {
-                if !check_fzf_installed() {
+                if !silicate.check_fzf_installed() {
                     let msg =
                             "fzf is not installed or not found in PATH. Please install fzf to use the search feature."
                                 .to_string()
@@ -574,9 +577,9 @@ fn main() {
                     return;
                 }
 
-                match silicate_core::search_password(&config_dir(), option_tag) {
+                match silicate.search_password(option_tag) {
                     Ok(Some(selection)) => {
-                        let key = get_key();
+                        let key = get_key(&silicate);
                         let data = (if let Some(tag) = option_tag {
                             fs::read(format!("{}{}-{}.bin", config_dir(), selection, tag))
                         } else {
@@ -584,12 +587,13 @@ fn main() {
                         })
                         .unwrap();
                         let (nonce_bytes, cipher_bytes) = data.split_at(12);
-                        let password = silicate_core::decrypt_passwd(
-                            &key.try_into().unwrap(),
-                            cipher_bytes.to_vec(),
-                            nonce_bytes.try_into().unwrap(),
-                        )
-                        .unwrap();
+                        let password = silicate
+                            .decrypt_passwd(
+                                &key.try_into().unwrap(),
+                                cipher_bytes.to_vec(),
+                                nonce_bytes.try_into().unwrap(),
+                            )
+                            .unwrap();
 
                         if *display {
                             let msg = format!("Password for {}: {}", selection, password.bold());
@@ -654,13 +658,14 @@ fn main() {
 
                 let length = length.unwrap_or(16); // Default length of 16 if not specified
 
-                let password = silicate_core::generate_password(length, symbols);
+                let password = silicate.generate_password(length, symbols);
 
                 if let Some(website) = website {
-                    let key = get_key();
+                    let key = get_key(&silicate);
 
-                    let (cipher_bytes, nonce_bytes) =
-                        encrypt_passwd(&key.try_into().unwrap(), password.clone()).unwrap();
+                    let (cipher_bytes, nonce_bytes) = silicate
+                        .encrypt_passwd(&key.try_into().unwrap(), password.clone())
+                        .unwrap();
 
                     if let Some(tag) = tag {
                         fs::write(
@@ -767,7 +772,7 @@ fn main() {
                 }
             }
             Command::Edit { website } => {
-                let file_path_option = match find_password_file(&config_dir(), website) {
+                let file_path_option = match silicate.find_password_file(website) {
                     Ok(path) => path,
                     Err(e) => {
                         println!(
@@ -786,7 +791,7 @@ fn main() {
                 };
 
                 if let Some(path) = file_path_option {
-                    let key_vec = get_key();
+                    let key_vec = get_key(&silicate);
                     let key_bytes = key_vec.as_slice();
 
                     let key: &[u8; 32] = match key_bytes.try_into() {
@@ -828,7 +833,7 @@ fn main() {
                     };
 
                     let (nonce_bytes, cipher_bytes) = data.split_at(12);
-                    let old_password = match silicate_core::decrypt_passwd(
+                    let old_password = match silicate.decrypt_passwd(
                         key,
                         cipher_bytes.to_vec(),
                         nonce_bytes.try_into().unwrap(),
@@ -931,10 +936,9 @@ fn main() {
                         }
                     }
 
-                    let (new_cipher_bytes, new_nonce_bytes) = match encrypt_passwd(
-                        key,
-                        new_password,
-                    ) {
+                    let (new_cipher_bytes, new_nonce_bytes) = match silicate
+                        .encrypt_passwd(key, new_password)
+                    {
                         Ok((c, n)) => (c, n),
                         Err(e) => {
                             println!(
@@ -980,12 +984,12 @@ fn main() {
             }
             Command::Export { file_path, key } => {
                 if *key {
-                    match export_key(file_path) {
+                    match silicate.export_key(file_path) {
                         Ok(()) => println!("Key exported successfully."),
                         Err(e) => eprintln!("Failed to export key: {}", e),
                     }
                 } else {
-                    let passwords = match list_passwords(&config_dir()) {
+                    let passwords = match silicate.list_passwords() {
                         Ok(p) => p,
                         Err(e) => {
                             println!(
@@ -1030,7 +1034,7 @@ fn main() {
             }
             Command::Import { file_path, key } => {
                 if *key {
-                    match import_key(file_path) {
+                    match silicate.import_key(file_path) {
                         Ok(()) => println!("Key imported successfully."),
                         Err(e) => eprintln!("Failed to import key: {}", e),
                     }
@@ -1081,7 +1085,7 @@ fn main() {
                 let mut input = String::new();
                 std::io::stdin().read_line(&mut input).unwrap();
                 if input.trim() == "y" || input.trim() == "Y" {
-                    match rename_password_file(&config_dir(), old_website, new_website, tag) {
+                    match silicate.rename_password_file(old_website, new_website, tag) {
                         Ok(()) => println!(
                             "{}",
                             format!(
@@ -1104,7 +1108,7 @@ fn main() {
             }
             Command::Tag { command } => match command {
                 TagCommand::List {} => {
-                    let tags = match silicate_core::list_tags(&config_dir()) {
+                    let tags = match silicate.list_tags() {
                         Ok(t) => t,
                         Err(e) => {
                             println!(
@@ -1129,9 +1133,9 @@ fn main() {
                 }
             },
             Command::List { tag } => {
-                let websites =
-                    silicate_core::list_passwords(&config_dir())
-                        .expect("Failed to list passwords.");
+                let websites = silicate
+                    .list_passwords()
+                    .expect("Failed to list passwords.");
                 if websites.is_empty() {
                     println!("{}", "No passwords stored yet.".yellow());
                 } else {
@@ -1174,7 +1178,7 @@ fn main() {
                 }
             }
             Command::Stats {} => {
-                let stats = match silicate_core::get_stats(&config_dir()) {
+                let stats = match silicate.get_stats() {
                     Ok(s) => s,
                     Err(e) => {
                         println!(
@@ -1214,7 +1218,7 @@ fn main() {
             }
         },
         None => {
-            let passwords = match list_passwords(&config_dir()) {
+            let passwords = match silicate.list_passwords() {
                 Ok(passwords) => passwords,
                 Err(e) => {
                     let msg = format!("Failed to get passwords: {e}").dimmed().red();
@@ -1223,10 +1227,10 @@ fn main() {
                 }
             };
 
-            let key = get_key().try_into().unwrap();
+            let key = get_key(&silicate).try_into().unwrap();
 
             let mut terminal = ratatui::init();
-            let mut app = tui::App::new(passwords, key);
+            let mut app = tui::App::new(passwords, key, silicate.config_dir().to_string());
 
             let result = app.run(&mut terminal);
 

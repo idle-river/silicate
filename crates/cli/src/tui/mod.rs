@@ -1,25 +1,17 @@
-use std::{ fs, io };
+use std::{fs, io};
 
-use crossterm::event::{ Event::Key, KeyCode, KeyEvent, KeyEventKind };
+use crossterm::event::{Event::Key, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
-    DefaultTerminal,
-    Frame,
-    layout::{ Alignment, Constraint, Layout, Rect },
-    style::{ Modifier, Style, Stylize },
-    text::{ Line, Span },
+    DefaultTerminal, Frame,
+    layout::{Alignment, Constraint, Layout, Rect},
+    style::{Modifier, Style, Stylize},
+    text::{Line, Span},
     widgets::{
-        Block,
-        Borders,
-        Clear,
-        HighlightSpacing,
-        List,
-        ListItem,
-        ListState,
-        Paragraph,
-        Wrap,
+        Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Paragraph, Wrap,
     },
 };
-use silicate_core::SilicateError;
+use silicate_core::Silicate;
+use silicate_core::error::SilicateError;
 
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     Rect {
@@ -41,13 +33,14 @@ pub struct App {
     entries: Vec<String>,
     state: ListState,
     key: [u8; 32],
+    silicate: Silicate,
     search_query: String,
     is_searching: bool,
     search_target: SearchTarget,
 }
 
 impl App {
-    pub fn new(entries: Vec<String>, key: [u8; 32]) -> Self {
+    pub fn new(entries: Vec<String>, key: [u8; 32], config_dir: String) -> Self {
         let mut state = ListState::default();
         state.select(None);
         App {
@@ -55,6 +48,7 @@ impl App {
             entries,
             state,
             key,
+            silicate: Silicate::new(config_dir),
             search_query: String::new(),
             is_searching: false,
             search_target: SearchTarget::Name,
@@ -71,7 +65,11 @@ impl App {
 
         let selected = self.state.selected().unwrap_or(0);
 
-        let next = if selected >= self.filtered_entries().len() - 1 { 0 } else { selected + 1 };
+        let next = if selected >= self.filtered_entries().len() - 1 {
+            0
+        } else {
+            selected + 1
+        };
 
         self.state.select(Some(next));
     }
@@ -86,7 +84,11 @@ impl App {
 
         let selected = self.state.selected().unwrap_or(0);
 
-        let previous = if selected == 0 { self.filtered_entries().len() - 1 } else { selected - 1 };
+        let previous = if selected == 0 {
+            self.filtered_entries().len() - 1
+        } else {
+            selected - 1
+        };
 
         self.state.select(Some(previous));
     }
@@ -95,11 +97,12 @@ impl App {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
 
-            let input = crossterm::event
-                ::read()
-                .map_err(|e| {
-                    io::Error::new(io::ErrorKind::Other, format!("Failed to read TUI input: {e}"))
-                })?;
+            let input = crossterm::event::read().map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to read TUI input: {e}"),
+                )
+            })?;
 
             if let Key(key_event) = input {
                 self.handle_key(key_event)?;
@@ -112,10 +115,9 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
-        let horizontal_area = Layout::horizontal([
-            Constraint::Percentage(25),
-            Constraint::Percentage(75),
-        ]).areas(area);
+        let horizontal_area =
+            Layout::horizontal([Constraint::Percentage(25), Constraint::Percentage(75)])
+                .areas(area);
 
         let [list_area, view_area] = horizontal_area;
 
@@ -140,7 +142,9 @@ impl App {
             .block(Block::default().title("Passwords").borders(Borders::ALL))
             .highlight_symbol("> ")
             .highlight_style(
-                Style::default().fg(ratatui::style::Color::Green).add_modifier(Modifier::REVERSED)
+                Style::default()
+                    .fg(ratatui::style::Color::Green)
+                    .add_modifier(Modifier::REVERSED),
             )
             .highlight_spacing(HighlightSpacing::Always);
 
@@ -149,39 +153,29 @@ impl App {
         let details_content = if let Some(selected_idx) = self.state.selected() {
             if let Some(entry_name) = filtered.get(selected_idx) {
                 match self.get_decrypted_password(entry_name) {
-                    Ok(password) =>
-                        vec![
-                            Line::from(
-                                vec![
-                                    Span::raw("Account/Site: "),
-                                    Span::styled(
-                                        entry_name,
-                                        Style::default()
-                                            .fg(ratatui::style::Color::Cyan)
-                                            .add_modifier(Modifier::BOLD)
-                                    )
-                                ]
+                    Ok(password) => vec![
+                        Line::from(vec![
+                            Span::raw("Account/Site: "),
+                            Span::styled(
+                                entry_name,
+                                Style::default()
+                                    .fg(ratatui::style::Color::Cyan)
+                                    .add_modifier(Modifier::BOLD),
                             ),
-                            Line::from(""),
-                            Line::from(
-                                vec![
-                                    Span::raw("Password:     "),
-                                    Span::styled(
-                                        password,
-                                        Style::default().fg(ratatui::style::Color::Green)
-                                    )
-                                ]
-                            )
-                        ],
-                    Err(e) =>
-                        vec![
-                            Line::from(
-                                Span::styled(
-                                    format!("Decryption Error: {}", e),
-                                    Style::default().fg(ratatui::style::Color::Red)
-                                )
-                            )
-                        ],
+                        ]),
+                        Line::from(""),
+                        Line::from(vec![
+                            Span::raw("Password:     "),
+                            Span::styled(
+                                password,
+                                Style::default().fg(ratatui::style::Color::Green),
+                            ),
+                        ]),
+                    ],
+                    Err(e) => vec![Line::from(Span::styled(
+                        format!("Decryption Error: {}", e),
+                        Style::default().fg(ratatui::style::Color::Red),
+                    ))],
                 }
             } else {
                 vec![Line::from("No entry found.")]
@@ -203,13 +197,17 @@ impl App {
 
             // Construct the visual toggle selectors with custom highlights
             let name_style = if self.search_target == SearchTarget::Name {
-                Style::default().fg(ratatui::style::Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(ratatui::style::Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(ratatui::style::Color::DarkGray)
             };
 
             let tag_style = if self.search_target == SearchTarget::Tag {
-                Style::default().fg(ratatui::style::Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(ratatui::style::Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(ratatui::style::Color::DarkGray)
             };
@@ -228,9 +226,10 @@ impl App {
             let popup_content = vec![
                 Line::from(self.search_query.as_str()),
                 Line::from("─".repeat((popup.width as usize).saturating_sub(2))).dim(),
-                Line::from(
-                    vec![Span::styled(name_icon, name_style), Span::styled(tag_icon, tag_style)]
-                )
+                Line::from(vec![
+                    Span::styled(name_icon, name_style),
+                    Span::styled(tag_icon, tag_style),
+                ]),
             ];
 
             let input = Paragraph::new(popup_content)
@@ -240,10 +239,8 @@ impl App {
             frame.render_widget(input, popup);
 
             // Cursor goes inside the box
-            frame.set_cursor_position((
-                popup.x + 1 + (self.search_query.len() as u16),
-                popup.y + 1,
-            ));
+            frame
+                .set_cursor_position((popup.x + 1 + (self.search_query.len() as u16), popup.y + 1));
         }
     }
 
@@ -268,15 +265,17 @@ impl App {
         // Read the encrypted file binary chunk
         let data = fs::read(full_path)?;
         if data.len() < 12 {
-            return Err(SilicateError::Plain("Invalid password file format (too short)"));
+            return Err(SilicateError::Plain(
+                "Invalid password file format (too short)",
+            ));
         }
 
         let (nonce_bytes, cipher_bytes) = data.split_at(12);
 
-        let decrypted = silicate_core::decrypt_passwd(
+        let decrypted = self.silicate.decrypt_passwd(
             &self.key,
             cipher_bytes.to_vec(),
-            nonce_bytes.try_into()?
+            nonce_bytes.try_into()?,
         )?;
 
         Ok(decrypted)
@@ -293,16 +292,14 @@ impl App {
                 .filter(|entry| {
                     let entry_lc = entry.to_lowercase();
                     match self.search_target {
-                        SearchTarget::Name =>
-                            entry_lc
-                                .split_once('-')
-                                .map(|(name, _)| name.contains(&query))
-                                .unwrap_or_else(|| entry_lc.contains(&query)),
-                        SearchTarget::Tag =>
-                            entry_lc
-                                .split_once('-')
-                                .map(|(_, tag)| tag.contains(&query))
-                                .unwrap_or(false),
+                        SearchTarget::Name => entry_lc
+                            .split_once('-')
+                            .map(|(name, _)| name.contains(&query))
+                            .unwrap_or_else(|| entry_lc.contains(&query)),
+                        SearchTarget::Tag => entry_lc
+                            .split_once('-')
+                            .map(|(_, tag)| tag.contains(&query))
+                            .unwrap_or(false),
                     }
                 })
                 .cloned()
