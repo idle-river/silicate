@@ -5,7 +5,7 @@ edition = "2024"
 description = "A simplistic password manager, built in Rust."
 license = "MIT"
 repository = "https://github.com/pure-sagacity/silicate"
-readme = "README.md"
+readme = "../../README.md"
 keywords = ["password", "manager", "cli", "tool", "encryption"]
 
 [[bin]]
@@ -15,7 +15,7 @@ path = "./src/main.rs"
 [dependencies]
 serde = { version = "1.0.152", features = ["derive"] }
 clap = { version = "4.0.32", features = ["derive"] }
-silicate-core = { path = "../core" }
+silicate-core = { version = "1.2.0", path = "../core" }
 serde_json = "1.0.96"
 crossterm = "0.29.0"
 rpassword = "7.5.4"
