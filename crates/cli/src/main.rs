@@ -1129,9 +1129,8 @@ fn main() {
                 }
             },
             Command::List { tag } => {
-                let websites =
-                    silicate_core::list_passwords(&config_dir())
-                        .expect("Failed to list passwords.");
+                let websites = silicate_core::list_passwords(&config_dir())
+                    .expect("Failed to list passwords.");
                 if websites.is_empty() {
                     println!("{}", "No passwords stored yet.".yellow());
                 } else {
