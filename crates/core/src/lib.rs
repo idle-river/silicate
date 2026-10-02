@@ -1,4 +1,13 @@
-use error::SilicateError;
+pub use error::SilicateError;
+
+pub use crypto::{decrypt_passwd, encrypt_passwd};
+pub use keyring::{is_keyring_available, retrieve_key_from_keyring, store_key_in_keyring};
+pub use keys::{
+    derive_key_from_password, export_key, generate_fallback_key, generate_key, import_key,
+};
+pub use passwords::{generate_password, list_passwords, search_password};
+pub use stats::{Stats, get_stats};
+pub use tags::list_tags;
 
 pub mod crypto;
 pub mod error;
